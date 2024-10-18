@@ -71,7 +71,7 @@ class Gestures():
                 pyautogui.leftClick()
                 self.has_left_click = True
             if self.debug:
-                cv2.putText(frame, "Left Click", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Left Click", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         else:
             self.has_left_click = False
 
@@ -82,7 +82,7 @@ class Gestures():
                 pyautogui.rightClick()
                 self.has_right_click = True
             if self.debug:
-                cv2.putText(frame, "Right Click", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Right Click", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         else:
             self.has_right_click = False
     
@@ -94,7 +94,7 @@ class Gestures():
         if is_touching:
             move_mouse(self.previous_pos, self.curr_pos)
             if self.debug:
-                cv2.putText(frame, "Move Mouse", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Move Mouse", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
 
     def scroll(self, frame, landmarks):
@@ -105,15 +105,15 @@ class Gestures():
         if is_touching:
             scroll(self.previous_pos, self.curr_pos)
             if self.debug:
-                cv2.putText(frame, "Scroll", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Scroll", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
 
     def detect_gesture(self, frame, landmarks, processed):
         if self.debug:
             if self.is_active:
-                cv2.putText(frame, "Active", [25, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Active", [10, 35], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             else:
-                cv2.putText(frame, "Inactive", [25, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(frame, "Inactive", [10, 35], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         if len(landmarks) >= 21:
             self.curr_pos = self.find_position(processed)
