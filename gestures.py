@@ -26,11 +26,13 @@ def scroll(prev, curr, scale = 8):
 class Gestures():
     def __init__(self, hand_landmarks, position_index, debug = False) -> None:
         self.hand_landmarks = hand_landmarks
+        self.is_active = False
         self.previous_pos = None
         self.curr_pos = None
         self.position_index = position_index
         self.debug = debug
 
+        self.has_toggle = False
         self.has_left_click = False
         self.has_right_click = False
 
@@ -52,6 +54,15 @@ class Gestures():
             angle = 360 - angle
         return abs(target - angle) <= range
     
+    def toggle_active(self, landmarks):
+        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.PINKY_TIP]])
+        if is_touching:
+            if not self.has_toggle:
+                self.is_active = not self.is_active
+                self.has_toggle = True
+        else:
+            self.has_toggle = False
+    
     def left_click(self, frame, landmarks):
         is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.MIDDLE_FINGER_DIP]], 3.5)
         is_bent = self.is_angle([landmarks[2], landmarks[3], landmarks[4]], 110, 15)
@@ -60,7 +71,7 @@ class Gestures():
                 pyautogui.leftClick()
                 self.has_left_click = True
             if self.debug:
-                cv2.putText(frame, "Left Click", [50, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Left Click", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         else:
             self.has_left_click = False
 
@@ -71,7 +82,7 @@ class Gestures():
                 pyautogui.rightClick()
                 self.has_right_click = True
             if self.debug:
-                cv2.putText(frame, "Right Click", [50, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Right Click", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         else:
             self.has_right_click = False
     
@@ -83,7 +94,7 @@ class Gestures():
         if is_touching:
             move_mouse(self.previous_pos, self.curr_pos)
             if self.debug:
-                cv2.putText(frame, "Move Mouse", [50, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Move Mouse", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
 
     def scroll(self, frame, landmarks):
@@ -94,16 +105,25 @@ class Gestures():
         if is_touching:
             scroll(self.previous_pos, self.curr_pos)
             if self.debug:
-                cv2.putText(frame, "Scroll", [50, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Scroll", [25, 75], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
 
     def detect_gesture(self, frame, landmarks, processed):
+        if self.debug:
+            if self.is_active:
+                cv2.putText(frame, "Active", [25, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            else:
+                cv2.putText(frame, "Inactive", [25, 50], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
         if len(landmarks) >= 21:
             self.curr_pos = self.find_position(processed)
 
-            self.left_click(frame, landmarks)
-            self.right_click(frame, landmarks)
-            self.move_rel(frame, landmarks)
-            self.scroll(frame, landmarks)
+            self.toggle_active(landmarks)
+
+            if self.is_active:
+                self.left_click(frame, landmarks)
+                self.right_click(frame, landmarks)
+                self.move_rel(frame, landmarks)
+                self.scroll(frame, landmarks)
 
             self.previous_pos = self.curr_pos
