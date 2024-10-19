@@ -39,7 +39,7 @@ def main():
             gestures.detect_gesture(frame, landmarks, proccessed)
 
             cv2.imshow("Camera Mouse", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(2) & 0xFF == ord('q'):
                 break
             if cv2.getWindowProperty('Camera Mouse', cv2.WND_PROP_VISIBLE) < 1:        
                 break
