@@ -1,51 +1,45 @@
 import cv2
 import mediapipe as mp
-from gestures import Gestures
+from utils import draw_landmarks
 
-
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(
-    static_image_mode=False,
-    model_complexity=1,
-    min_detection_confidence=0.7,
-    min_tracking_confidence=0.7,
-    max_num_hands=1
-)
-
+# mediapipe config
+BaseOptions = mp.tasks.BaseOptions
+GestureRecognizer = mp.tasks.vision.GestureRecognizer
+GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
+VisionRunningMode = mp.tasks.vision.RunningMode
+options = GestureRecognizerOptions(
+    base_options=BaseOptions(model_asset_path='gesture_recognizer.task'),
+    running_mode=VisionRunningMode.VIDEO,
+    min_hand_detection_confidence=0.7,
+    num_hands=1)
 
 def main():
-    draw = mp.solutions.drawing_utils
-    camera = cv2.VideoCapture(0)
-    gestures = Gestures(mp_hands.HandLandmark, mp_hands.HandLandmark.INDEX_FINGER_TIP, True)
+    with GestureRecognizer.create_from_options(options) as recognizer:
+        camera = cv2.VideoCapture(0)
+        
+        try:
+            while camera.isOpened():
+                retrieved, frame = camera.read()
+                if not retrieved:
+                    break
+                
+                timestamp = round(camera.get(cv2.CAP_PROP_POS_MSEC))
+                frame = cv2.flip(frame, 1)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    try:
-        while camera.isOpened():
-            ret, frame = camera.read()
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+                result = recognizer.recognize_for_video(mp_image, timestamp)
+                print(result.gestures)
 
-            if not ret:
-                break
-            
-            frame = cv2.flip(frame, 1)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            proccessed = hands.process(frame_rgb)
+                annotated_image = draw_landmarks(mp_image.numpy_view(), result)
 
-            landmarks = []
-            if proccessed.multi_hand_landmarks:
-                hand_landmarks = proccessed.multi_hand_landmarks[0]
-                draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                for lm in hand_landmarks.landmark:
-                    landmarks.append((lm.x, lm.y))
-            
-            gestures.detect_gesture(frame, landmarks, proccessed)
+                cv2.imshow("Camera Mouse Debug", cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
+                if (cv2.waitKey(1) & 0xFF == ord('q')):
+                    break
+        finally:
+            camera.release()
+            cv2.destroyAllWindows()
+        
 
-            cv2.imshow("Camera Mouse", frame)
-            if cv2.waitKey(2) & 0xFF == ord('q'):
-                break
-            if cv2.getWindowProperty('Camera Mouse', cv2.WND_PROP_VISIBLE) < 1:        
-                break
-    finally:
-        camera.release()
-        cv2.destroyAllWindows()
-
-if __name__ == '__main__':
-  main()
+if __name__ == "__main__":
+    main()
