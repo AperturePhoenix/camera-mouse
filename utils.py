@@ -1,7 +1,10 @@
+from typing import List, cast
 import cv2
 from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
 import numpy as np
+from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
+from mediapipe.tasks.python.components.containers.category import Category
 
 def get_angle(a, b, c):
     radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - np.arctan2(a[1] - b[1], a[0] - b[0])
@@ -21,13 +24,13 @@ FONT_SIZE = 1
 FONT_THICKNESS = 1
 HANDEDNESS_TEXT_COLOR = (88, 205, 54) # vibrant green
 
-def draw_landmarks(rgb_image, detection_result):
+def draw_landmarks(rgb_image, detection_result: GestureRecognizerResult):
     if not detection_result:
         return rgb_image
 
     hand_landmarks_list = detection_result.hand_landmarks
     handedness_list = detection_result.handedness
-    gestures = detection_result.gestures
+    gestures = cast(List[List[Category]], detection_result.gestures)
     annotated_image = np.copy(rgb_image)
 
     # Loop through the detected hands to visualize.
@@ -57,6 +60,9 @@ def draw_landmarks(rgb_image, detection_result):
                     (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
         if gestures:
+            cv2.putText(annotated_image, f"{gestures[idx][0].score}",
+                    (text_x, text_y - 6 * MARGIN), cv2.FONT_HERSHEY_DUPLEX,
+                    FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
             cv2.putText(annotated_image, f"{gestures[idx][0].category_name}",
                     (text_x, text_y - 3 * MARGIN), cv2.FONT_HERSHEY_DUPLEX,
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
