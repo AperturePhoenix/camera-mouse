@@ -1,11 +1,13 @@
 from typing import cast
 import cv2
 import mediapipe as mp
-from new_gestures import Gestures
+from gestures import Gestures
 from utils import draw_landmarks
 from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
+from mediapipe.tasks.python.components.processors import ClassifierOptions
 
 # mediapipe config
+# ["None", "Closed_Fist", "Open_Palm", "Pointing_Up", "Thumb_Down", "Thumb_Up", "Victory", "ILoveYou"]
 BaseOptions = mp.tasks.BaseOptions
 GestureRecognizer = mp.tasks.vision.GestureRecognizer
 GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
@@ -15,11 +17,12 @@ options = GestureRecognizerOptions(
     running_mode=VisionRunningMode.VIDEO,
     min_hand_detection_confidence=0.7,
     num_hands=1)
+    # canned_gesture_classifier_options=ClassifierOptions(category_allowlist=["None", "Closed_Fist", "Pointing_Up"]))
 
 def main():
     with GestureRecognizer.create_from_options(options) as recognizer:
         camera = cv2.VideoCapture(0)
-        gestures = Gestures()
+        gestures = Gestures(True)
         
         try:
             while camera.isOpened():

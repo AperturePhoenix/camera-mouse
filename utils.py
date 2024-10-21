@@ -20,7 +20,7 @@ def get_distance(landmark_list):
     return np.interp(L, [0, 1], [0, 100])
 
 MARGIN = 10  # pixels
-FONT_SIZE = 1
+FONT_SIZE = 0.75
 FONT_THICKNESS = 1
 HANDEDNESS_TEXT_COLOR = (88, 205, 54) # vibrant green
 
@@ -60,7 +60,7 @@ def draw_landmarks(rgb_image, detection_result: GestureRecognizerResult):
                     (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
         if gestures:
-            cv2.putText(annotated_image, f"{gestures[idx][0].score}",
+            cv2.putText(annotated_image, f"{round(gestures[idx][0].score, 2)}",
                     (text_x, text_y - 6 * MARGIN), cv2.FONT_HERSHEY_DUPLEX,
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
             cv2.putText(annotated_image, f"{gestures[idx][0].category_name}",

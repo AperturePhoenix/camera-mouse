@@ -1,142 +1,130 @@
-import cv2
-from utils import get_distance, get_angle
-import pyautogui
-import math
+from typing import List, cast
+from mediapipe.tasks.python.components.containers.category import Category
 
+import cv2
+from mediapipe.tasks.python.components.containers.landmark import NormalizedLandmark
+from mediapipe.tasks.python.vision.gesture_recognizer import GestureRecognizerResult
+import numpy as np
+import pyautogui
+
+FONT_SIZE = 0.75
+FONT_THICKNESS = 1
+TEXT_COLOR = (88, 205, 54)
 screen_width, screen_height = pyautogui.size()
 
-def normalize(value: int, norm_value = 4) -> int:
-    if abs(value) < norm_value:
+
+def deadzone(value: int, deadzone: int = 4) -> int:
+    if abs(value) < deadzone:
         return 0
     return value
 
-def move_mouse(prev, curr, x_scale = 2, y_scale = 3):
-    if prev is not None and curr is not None:
-        x = normalize(int((curr.x - prev.x) * screen_width))
-        y = normalize(int((curr.y - prev.y) * screen_height))
-        try:
-            pyautogui.moveRel(x * x_scale, y * y_scale, _pause=False)
-        except:
-            print("Tried to move out of bounds")
 
-def scroll(prev, curr, scale = 8):
-    if prev is not None and curr is not None:
-        x = (curr.x - prev.x) * screen_width
-        y = (curr.y - prev.y) * screen_width
-        direction = 1 if (curr.y - prev.y) + (prev.x - curr.x) > 0 else -1
-        dist = int(math.sqrt(pow(x, 2) + pow(y, 2)))
-        pyautogui.scroll(dist * scale * direction)
+def dist(landmarks: List[NormalizedLandmark], i: int, j: int) -> float:
+    a = landmarks[i]
+    b = landmarks[j]
+    return np.hypot(a.x - b.x, a.y - b.y)
+
+
+def is_touching(landmarks: List[NormalizedLandmark], i: int, j: int, max_dist: float = 7.5) -> bool:
+    return np.interp(dist(landmarks, i, j), [0, 1], [0, 100]) <= max_dist
+
 
 class Gestures():
-    def __init__(self, hand_landmarks, position_index, debug = False) -> None:
-        self.hand_landmarks = hand_landmarks
-        self.is_active = False
-        self.previous_pos = None
-        self.curr_pos = None
-        self.position_index = position_index
+    curr_pos: NormalizedLandmark = None
+    prev_pos: NormalizedLandmark = None
+    frame: np.ndarray
+
+    active: bool = False
+    has_toggle: bool = False
+    has_left_click: bool = False
+    has_right_click: bool = False
+
+    debug: bool
+
+    def __init__(self, debug = False) -> None:
         self.debug = debug
 
-        self.has_toggle = False
-        self.has_left_click = False
-        self.has_right_click = False
+    def detect(self, frame: np.ndarray, result: GestureRecognizerResult):
+        if not result.hand_landmarks:
+            self.curr_pos = None
+            self.prev_pos = None
+            self.frame = None
+            return
 
-    def find_position(self, processed):
-        """Find finger position"""
-        if processed.multi_hand_landmarks:
-            hand_landmarks = processed.multi_hand_landmarks[0]
-            position = hand_landmarks.landmark[self.position_index]
-            return position
-        return None
-    
-    def is_pointer_bent(self, landmarks) -> bool:
-        return landmarks[self.hand_landmarks.INDEX_FINGER_PIP][1] > landmarks[self.hand_landmarks.INDEX_FINGER_DIP][1]
-    
-    def is_touching(self, landmarks, target = 3):
-        dist = get_distance(landmarks)
-        return dist <= target
-    
-    def is_angle(self, landmarks, target, range):
-        angle = get_angle(*landmarks)
-        if (angle > 180):
-            angle = 360 - angle
-        return abs(target - angle) <= range
-    
-    def toggle_active(self, landmarks) -> bool:
-        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.PINKY_TIP]])
-        if is_touching:
+        self.frame = frame
+        self.curr_pos = result.hand_landmarks[0][8]
+        self.toggle_active(result)
+        if self.active and self.prev_pos and result.gestures:
+            self.scroll(result)
+            self.move_mouse(result)
+            self.left_click(result)
+            self.right_click(result)
+
+        self.prev_pos = self.curr_pos
+
+    def toggle_active(self, result: GestureRecognizerResult):
+        if is_touching(result.hand_landmarks[0], 4, 20, 3):
             if not self.has_toggle:
-                self.is_active = not self.is_active
+                self.active = not self.active
                 self.has_toggle = True
             return True
         else:
             self.has_toggle = False
-        
-        return False
+
+        if self.debug:
+            if self.active:
+                cv2.putText(self.frame, "Active", (15, 25), cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+            else:
+                cv2.putText(self.frame, "Inactive", (15, 25), cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, (255, 0, 0), FONT_THICKNESS, cv2.LINE_AA)
     
-    def left_click(self, frame, landmarks):
-        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.MIDDLE_FINGER_DIP]], 3.5)
-        is_bent = self.is_angle([landmarks[2], landmarks[3], landmarks[4]], 110, 15)
-        if is_touching and is_bent:
+    def move_mouse(self, result: GestureRecognizerResult):
+        gesture = cast(Category, result.gestures[0][0])
+        if not gesture.category_name == "Pointing_Up" or gesture.score < 0.8 or not is_touching(result.hand_landmarks[0], 4, 10, 3):
+            return
+        
+        x = deadzone((self.curr_pos.x - self.prev_pos.x) * screen_width, 3)
+        y = deadzone((self.curr_pos.y - self.prev_pos.y) * screen_width, 3)
+        pyautogui.moveRel(x * 2, y * 4, _pause=False)
+        
+        if self.debug:
+            cv2.putText(self.frame, f"Mouse: {x}", (15, 50), cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+            cv2.putText(self.frame, f"Mouse: {y}", (15, 75), cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+    
+    def left_click(self, result: GestureRecognizerResult):
+        gesture = cast(Category, result.gestures[0][0])
+        if not gesture.category_name == "Pointing_Up" or gesture.score < 0.8:
+            return
+        
+        if is_touching(result.hand_landmarks[0], 4, 11, 3):
             if not self.has_left_click:
-                pyautogui.leftClick()
-                self.has_left_click = True
+                    pyautogui.leftClick()
+                    self.has_left_click = True
             if self.debug:
-                cv2.putText(frame, "Left Click", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(self.frame, "Left Click", [10, 50], cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
         else:
             self.has_left_click = False
 
-    def right_click(self, frame, landmarks):
-        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.MIDDLE_FINGER_TIP]], 2)
-        if is_touching:
-            if not self.has_right_click:
-                pyautogui.rightClick()
-                self.has_right_click = True
-            if self.debug:
-                cv2.putText(frame, "Right Click", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        else:
-            self.has_right_click = False
-    
-    def move_rel(self, frame, landmarks) -> bool:
-        if self.previous_pos is None:
-            return False
-        
-        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.MIDDLE_FINGER_PIP]], 3.5)
-        if is_touching:
-            move_mouse(self.previous_pos, self.curr_pos)
-            if self.debug:
-                cv2.putText(frame, "Move Mouse", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            return True
-
-        return False
-
-
-    def scroll(self, frame, landmarks):
-        if self.previous_pos is None:
+    def right_click(self, result: GestureRecognizerResult):
+        gesture = cast(Category, result.gestures[0][0])
+        if not gesture.category_name == "Pointing_Up" or gesture.score < 0.8:
             return
         
-        is_touching = self.is_touching([landmarks[self.hand_landmarks.THUMB_TIP], landmarks[self.hand_landmarks.INDEX_FINGER_PIP]])
-        if is_touching:
-            scroll(self.previous_pos, self.curr_pos)
+        if is_touching(result.hand_landmarks[0], 4, 12, 3):
+            if not self.has_right_click:
+                    pyautogui.rightClick()
+                    self.has_right_click = True
             if self.debug:
-                cv2.putText(frame, "Scroll", [10, 60], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(self.frame, "Right Click", [10, 50], cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+        else:
+            self.has_right_click = False
 
+    def scroll(self, result: GestureRecognizerResult):
+        gesture = cast(Category, result.gestures[0][0])
+        if not gesture.category_name == "Closed_Fist" or gesture.score < 0.8 or not is_touching(result.hand_landmarks[0], 4, 8):
+            return
+        
+        amount = deadzone(round((self.prev_pos.x - self.curr_pos.x) * screen_width))
+        pyautogui.scroll(amount * 9)
 
-    def detect_gesture(self, frame, landmarks, processed):
         if self.debug:
-            if self.is_active:
-                cv2.putText(frame, "Active", [10, 35], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            else:
-                cv2.putText(frame, "Inactive", [10, 35], cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-        if len(landmarks) >= 21:
-            self.curr_pos = self.find_position(processed)
-
-            if not self.toggle_active(landmarks) and self.is_active:
-                if self.is_pointer_bent(landmarks):
-                    self.left_click(frame, landmarks)
-                    self.right_click(frame, landmarks)
-                    self.move_rel(frame, landmarks)
-                else:
-                    self.scroll(frame, landmarks)
-
-            self.previous_pos = self.curr_pos
+            cv2.putText(self.frame, f"Scoll: {amount}", (15, 50), cv2.FONT_HERSHEY_DUPLEX, FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
